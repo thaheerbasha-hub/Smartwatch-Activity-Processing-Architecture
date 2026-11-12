@@ -1,0 +1,183 @@
+/* Dark Silicon Hardware Workbench Stylesheet */
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&family=JetBrains+Mono:wght@400;500;600;700&display=swap');
+
+:root {
+  --bg-dark: #0b1120;
+  --card-bg: rgba(15, 23, 42, 0.85);
+  --card-border: rgba(51, 65, 85, 0.75);
+  --cyan-glow: #38bdf8;
+  --blue-glow: #3b82f6;
+  --emerald-glow: #10b981;
+  --amber-glow: #f59e0b;
+  --rose-glow: #f43f5e;
+}
+
+body {
+  background-color: var(--bg-dark);
+  font-family: 'Inter', sans-serif;
+  color: #f1f5f9;
+  overflow-x: hidden;
+}
+
+.font-mono-code {
+  font-family: 'JetBrains Mono', monospace;
+}
+
+/* Glassmorphism Card */
+.glass-card {
+  background: var(--card-bg);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+  border: 1px solid var(--card-border);
+  border-radius: 0.75rem;
+  box-shadow: 0 10px 25px -5px rgba(0, 0, 0, 0.5), 0 8px 10px -6px rgba(0, 0, 0, 0.4);
+}
+
+.glass-card-hover {
+  transition: all 0.25s cubic-bezier(0.4, 0, 0.2, 1);
+}
+.glass-card-hover:hover {
+  border-color: rgba(56, 189, 248, 0.5);
+  box-shadow: 0 12px 30px -5px rgba(56, 189, 248, 0.15), 0 0 15px rgba(56, 189, 248, 0.1);
+}
+
+/* Pulsating LED Beacon */
+@keyframes pulse-beacon {
+  0%, 100% {
+    opacity: 1;
+    transform: scale(1);
+    box-shadow: 0 0 8px currentColor;
+  }
+  50% {
+    opacity: 0.4;
+    transform: scale(0.85);
+    box-shadow: 0 0 2px currentColor;
+  }
+}
+
+.led-beacon {
+  display: inline-block;
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  animation: pulse-beacon 1.8s infinite ease-in-out;
+}
+
+.led-emerald {
+  background-color: #10b981;
+  color: #10b981;
+}
+
+.led-rose {
+  background-color: #f43f5e;
+  color: #f43f5e;
+}
+
+.led-amber {
+  background-color: #f59e0b;
+  color: #f59e0b;
+}
+
+.led-cyan {
+  background-color: #38bdf8;
+  color: #38bdf8;
+}
+
+/* Custom Scrollbars */
+::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+::-webkit-scrollbar-track {
+  background: #0b1120;
+}
+::-webkit-scrollbar-thumb {
+  background: #334155;
+  border-radius: 3px;
+}
+::-webkit-scrollbar-thumb:hover {
+  background: #475569;
+}
+
+/* Glowing text and borders */
+.glow-cyan {
+  text-shadow: 0 0 12px rgba(56, 189, 248, 0.5);
+}
+.glow-emerald {
+  text-shadow: 0 0 12px rgba(16, 185, 129, 0.5);
+}
+.glow-amber {
+  text-shadow: 0 0 12px rgba(245, 158, 11, 0.5);
+}
+.glow-rose {
+  text-shadow: 0 0 12px rgba(244, 63, 94, 0.5);
+}
+
+/* Pipeline Stage Cards */
+.pipeline-stage-card {
+  transition: transform 0.2s ease, border-color 0.2s ease, box-shadow 0.2s ease;
+}
+.pipeline-stage-card.active-stage {
+  border-color: #38bdf8;
+  box-shadow: 0 0 20px rgba(56, 189, 248, 0.35);
+  transform: translateY(-2px);
+}
+.pipeline-stage-card.stall-stage {
+  border-color: #f59e0b;
+  box-shadow: 0 0 20px rgba(245, 158, 11, 0.35);
+}
+.pipeline-stage-card.flush-stage {
+  border-color: #f43f5e;
+  box-shadow: 0 0 20px rgba(244, 63, 94, 0.35);
+}
+
+/* Interactive Table Highlights */
+.table-row-active {
+  background-color: rgba(56, 189, 248, 0.15) !important;
+  border-left: 3px solid #38bdf8;
+}
+.table-row-bubble {
+  background-color: rgba(245, 158, 11, 0.1) !important;
+  border-left: 3px solid #f59e0b;
+}
+
+/* Range input styled */
+input[type=range] {
+  accent-color: #38bdf8;
+}
+
+/* Toast Animations */
+@keyframes slideInRight {
+  from {
+    transform: translateX(110%);
+    opacity: 0;
+  }
+  to {
+    transform: translateX(0);
+    opacity: 1;
+  }
+}
+@keyframes fadeOutRight {
+  from {
+    transform: translateX(0);
+    opacity: 1;
+  }
+  to {
+    transform: translateX(110%);
+    opacity: 0;
+  }
+}
+.toast-enter {
+  animation: slideInRight 0.3s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+}
+.toast-exit {
+  animation: fadeOutRight 0.3s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+}
+
+/* Tab Active Styles */
+.tab-btn.active-tab {
+  background: rgba(56, 189, 248, 0.15);
+  border-color: #38bdf8;
+  color: #38bdf8;
+  box-shadow: 0 0 12px rgba(56, 189, 248, 0.25);
+}

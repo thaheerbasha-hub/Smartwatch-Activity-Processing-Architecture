@@ -1,0 +1,862 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Smartwatch Activity Processing Architecture — ARM RISC, Pipeline, L1 Cache & Live BLE Simulator</title>
+  
+  <!-- Tailwind CSS CDN -->
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script>
+    tailwind.config = {
+      theme: {
+        extend: {
+          colors: {
+            darkSlate: '#0b1120',
+            cardSlate: '#0f172a',
+            borderSlate: 'rgba(51, 65, 85, 0.75)',
+            glowCyan: '#38bdf8',
+            glowBlue: '#3b82f6',
+            glowEmerald: '#10b981',
+            glowAmber: '#f59e0b',
+            glowRose: '#f43f5e',
+          },
+          fontFamily: {
+            sans: ['Inter', 'sans-serif'],
+            mono: ['"JetBrains Mono"', 'monospace'],
+          }
+        }
+      }
+    }
+  </script>
+
+  <!-- Google Fonts: Inter & JetBrains Mono -->
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&family=JetBrains+Mono:wght@400;500;600;700&display=swap" rel="stylesheet">
+
+  <!-- Chart.js -->
+  <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
+
+  <!-- Custom Stylesheet -->
+  <link rel="stylesheet" href="style.css">
+</head>
+<body class="bg-darkSlate text-slate-100 min-h-screen flex flex-col antialiased selection:bg-cyan-500/30 selection:text-cyan-200">
+
+  <!-- ======================================================== -->
+  <!-- 1. STICKY TOP HEADER WITH LIVE BLE PILL & TABS          -->
+  <!-- ======================================================== -->
+  <header class="sticky top-0 z-40 bg-slate-900/90 backdrop-blur-md border-b border-slate-800/80 px-4 lg:px-8 py-3 shadow-2xl">
+    <div class="max-w-7xl mx-auto flex flex-col md:flex-row md:items-center md:justify-between gap-3">
+      
+      <!-- Brand & Title -->
+      <div class="flex items-center gap-3">
+        <div class="w-10 h-10 rounded-xl bg-gradient-to-tr from-cyan-600 via-blue-600 to-indigo-600 p-0.5 shadow-lg shadow-cyan-500/20 flex items-center justify-center shrink-0">
+          <div class="w-full h-full bg-slate-950 rounded-[10px] flex items-center justify-center">
+            <svg class="w-5 h-5 text-cyan-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 3v2m6-2v2M9 19v2m6-2v2M5 9H3m2 6H3m18-6h-2m2 6h-2M7 19h10a2 2 0 002-2V7a2 2 0 00-2-2H7a2 2 0 00-2 2v10a2 2 0 002 2zM9 9h6v6H9V9z" />
+            </svg>
+          </div>
+        </div>
+        <div>
+          <div class="flex items-center gap-2">
+            <h1 class="text-base lg:text-lg font-bold tracking-tight text-white flex items-center gap-2">
+              Smartwatch Activity Processing Architecture
+            </h1>
+            <span class="px-2 py-0.5 rounded text-[10px] font-mono font-semibold bg-cyan-500/10 text-cyan-400 border border-cyan-500/30 uppercase">
+              ARM Cortex-M RISC
+            </span>
+          </div>
+          <p class="text-xs text-slate-400 font-medium">
+            5-Stage Pipeline • 16-Bit Q10 Fixed-Point ALU • L1 Split Cache • Live Web Bluetooth Hub
+          </p>
+        </div>
+      </div>
+
+      <!-- Right Header: Status Pill & View Navigation Tabs -->
+      <div class="flex flex-wrap items-center gap-2.5">
+        
+        <!-- Live BLE Status Pill -->
+        <div id="bleStatusPill" class="px-3 py-1 rounded-full text-xs font-semibold bg-rose-500/20 text-rose-300 border border-rose-500/40 flex items-center gap-2 shadow-inner">
+          <span id="bleLed" class="led-beacon led-rose shrink-0"></span>
+          <span id="bleStatusText" class="font-mono-code text-[11px] font-medium tracking-tight">BLE: DISCONNECTED</span>
+        </div>
+
+        <!-- View Switching Tabs -->
+        <div class="flex items-center bg-slate-950 p-1 rounded-lg border border-slate-800 text-xs font-medium">
+          <button class="tab-btn active-tab px-3 py-1.5 rounded-md transition-all flex items-center gap-1.5 border border-transparent" data-tab="tab-overview">
+            <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z"/></svg>
+            <span>1. Overview & Sensors</span>
+          </button>
+          <button class="tab-btn px-3 py-1.5 rounded-md text-slate-400 hover:text-slate-200 transition-all flex items-center gap-1.5 border border-transparent" data-tab="tab-pipeline">
+            <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 10V3L4 14h7v7l9-11h-7z"/></svg>
+            <span>2. ARM RISC & Pipeline</span>
+          </button>
+          <button class="tab-btn px-3 py-1.5 rounded-md text-slate-400 hover:text-slate-200 transition-all flex items-center gap-1.5 border border-transparent" data-tab="tab-cache">
+            <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 7v10c0 2 1.5 3 3.5 3h9c2 0 3.5-1 3.5-3V7c0-2-1.5-3-3.5-3h-9C5.5 4 4 5 4 7zm0 5h16M9 4v16"/></svg>
+            <span>3. L1 Cache Inspector</span>
+          </button>
+        </div>
+
+        <!-- Architectural Architecture Guide Modal Trigger -->
+        <button id="btnOpenGuide" onclick="document.getElementById('guideModal').classList.remove('hidden')" class="p-2 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-300 hover:text-white border border-slate-700 transition-all" title="Open COA Architectural Reference Guide">
+          <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 6.253v13m0-13C10.832 5.477 9.246 5 7.5 5S4.168 5.477 3 6.253v13C4.168 18.477 5.754 18 7.5 18s3.332.477 4.5 1.253m0-13C13.168 5.477 14.754 5 16.5 5c1.747 0 3.332.477 4.5 1.253v13C19.832 18.477 18.247 18 16.5 18c-1.746 0-3.332.477-4.5 1.253"/></svg>
+        </button>
+
+      </div>
+    </div>
+  </header>
+
+  <!-- ======================================================== -->
+  <!-- 2. LIVE SMARTWATCH BLE BRIDGE & WORKLOAD CONTROLS        -->
+  <!-- ======================================================== -->
+  <section class="max-w-7xl mx-auto w-full px-4 lg:px-8 mt-4">
+    <div class="glass-card p-4 lg:p-5 border border-slate-800">
+      
+      <!-- Top Row: Bluetooth Bridge Connection Panel -->
+      <div class="p-3.5 rounded-lg bg-slate-950/70 border border-slate-800/90 flex flex-col lg:flex-row lg:items-center justify-between gap-4 mb-4">
+        
+        <!-- BLE Device Information Strip -->
+        <div class="flex flex-wrap items-center gap-3">
+          <div class="flex items-center gap-2">
+            <span class="w-7 h-7 rounded-lg bg-blue-500/20 border border-blue-500/40 text-blue-400 flex items-center justify-center shrink-0">
+              <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 3v18l7-6-7-6 7-6-7 6z"/></svg>
+            </span>
+            <div>
+              <span class="text-[11px] uppercase tracking-wider text-slate-400 font-semibold block">Live BLE Bridge</span>
+              <span id="bleDeviceName" class="text-sm font-bold text-white">None</span>
+            </div>
+          </div>
+
+          <div class="h-6 w-px bg-slate-800 hidden sm:block"></div>
+
+          <!-- Real-Time GATT Badges -->
+          <div class="flex flex-wrap items-center gap-2 text-xs">
+            <span id="bleModeBadge" class="px-2 py-0.5 rounded text-[11px] font-semibold bg-slate-800 text-slate-400 border border-slate-700">STANDBY</span>
+            <span id="bleBatteryBadge" class="px-2 py-0.5 rounded text-[11px] font-mono-code bg-slate-800/80 text-emerald-300 border border-slate-700">🔋 --%</span>
+            <span id="bleHeartRateBadge" class="px-2 py-0.5 rounded text-[11px] font-mono-code bg-slate-800/80 text-rose-300 border border-slate-700">❤️ -- BPM</span>
+            <span id="bleCadenceBadge" class="px-2 py-0.5 rounded text-[11px] font-mono-code bg-slate-800/80 text-cyan-300 border border-slate-700">👟 -- SPM</span>
+          </div>
+        </div>
+
+        <!-- BLE Actions & Fallback Controls -->
+        <div class="flex flex-wrap items-center gap-2.5">
+          <!-- Connect / Disconnect Buttons -->
+          <button id="btnConnectBle" class="px-4 py-2 rounded-lg bg-gradient-to-r from-cyan-500 to-blue-600 hover:from-cyan-400 hover:to-blue-500 text-white font-semibold text-xs shadow-lg shadow-cyan-500/25 flex items-center gap-2 transition-all transform active:scale-95" title="Scan and pair physical smartwatch via Web Bluetooth">
+            <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4"/></svg>
+            <span>Connect Smartwatch (BLE)</span>
+          </button>
+
+          <!-- Quick Link Windows Paired Watch -->
+          <button id="btnQuickLinkWatch" class="px-3 py-2 rounded-lg bg-slate-800 hover:bg-slate-700 text-cyan-300 border border-cyan-500/40 font-semibold text-xs transition-all flex items-center gap-1.5" title="Link a watch already paired in Windows Settings">
+            <svg class="w-3.5 h-3.5 text-cyan-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13.828 10.172a4 4 0 00-5.656 0l-4 4a4 4 0 105.656 5.656l1.102-1.101m-.758-4.899a4 4 0 005.656 0l4-4a4 4 0 00-5.656-5.656l-1.1 1.1"/></svg>
+            <span>Link Paired Watch</span>
+          </button>
+          
+          <button id="btnDisconnectBle" class="hidden px-3.5 py-2 rounded-lg bg-rose-600/20 hover:bg-rose-600/30 text-rose-300 border border-rose-500/40 font-semibold text-xs transition-all flex items-center gap-1.5">
+            <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/></svg>
+            <span>Disconnect</span>
+          </button>
+
+          <!-- DeviceMotion Sensor Toggle -->
+          <button id="btnToggleMotion" class="px-3 py-1.5 rounded-lg text-xs font-semibold border border-slate-700 hover:border-slate-500 bg-slate-800 text-slate-300 transition-all flex items-center gap-1.5" title="Use laptop or phone accelerometer tilt/shake to feed real-time IMU packets">
+            <svg class="w-3.5 h-3.5 text-amber-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 18h.01M8 21h8a2 2 0 002-2V5a2 2 0 00-2-2H8a2 2 0 00-2 2v14a2 2 0 002 2z"/></svg>
+            <span>Enable Device Motion</span>
+          </button>
+
+          <!-- Pairing Help Button -->
+          <button id="btnWatchHelp" class="p-2 rounded-lg bg-slate-800/80 hover:bg-slate-700 text-slate-400 hover:text-white border border-slate-700 transition-all" title="Smartwatch Pairing Guide & Troubleshooting">
+            <svg class="w-4 h-4 text-amber-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8.228 9c.549-1.165 2.03-2 3.772-2 2.21 0 4 1.343 4 3 0 1.4-1.278 2.575-3.006 2.907-.542.104-.994.54-.994 1.093m0 3h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>
+          </button>
+        </div>
+      </div>
+
+      <!-- Hardware Telemetry Bus & Real-Time DMA Ring Monitor -->
+      <div id="hardwareBusMonitor" class="px-3.5 py-2.5 rounded-lg bg-slate-900/80 border border-cyan-500/30 mb-4 flex flex-col md:flex-row items-center justify-between gap-3 text-xs">
+        <div class="flex items-center gap-2.5 text-slate-300 font-medium">
+          <span class="w-2.5 h-2.5 rounded-full bg-emerald-400 animate-pulse shrink-0"></span>
+          <span class="text-cyan-400 font-bold uppercase tracking-wider text-[11px]">Hardware Telemetry Bus:</span>
+          <span id="hardwareBusDesc" class="text-slate-300">Windows BLE Native Bridge &bull; MAC: <span id="hardwareMacDisplay" class="font-mono text-cyan-300">98:B6:ED:01:6E:A4</span> &bull; Service: <span class="font-mono text-indigo-300">0xFF12 / 0xD7F0</span></span>
+        </div>
+        <div class="flex flex-wrap items-center gap-2.5 text-xs font-mono-code">
+          <span class="px-2 py-0.5 rounded bg-slate-800/90 text-cyan-300 border border-slate-700">DMA Ring: 0x2000_0000 (400 frames)</span>
+          <span class="px-2 py-0.5 rounded bg-slate-800/90 text-emerald-300 border border-slate-700">Sampling: 50 Hz (20ms)</span>
+          <span class="px-2 py-0.5 rounded bg-slate-800/90 text-purple-300 border border-slate-700">Q10 ALU: 16-Bit Vector</span>
+        </div>
+      </div>
+
+      <!-- Bottom Row: 5 Hardware & Workload Selectors + Quick Presets -->
+      <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-3">
+        
+        <!-- 1. Input Source / Profile -->
+        <div>
+          <label class="block text-[11px] font-semibold uppercase text-slate-400 mb-1">Input Source / Profile</label>
+          <select id="selectInputSource" class="w-full bg-slate-950 border border-slate-700/80 rounded-lg px-2.5 py-1.5 text-xs text-slate-200 focus:outline-none focus:border-cyan-400 transition-colors">
+            <option value="walking" selected>Sim: Brisk Walking (112 SPM / 75 BPM)</option>
+            <option value="jogging">Sim: Jogging Run (158 SPM / 135 BPM)</option>
+            <option value="sedentary">Sim: Sedentary Desk (15 SPM / 62 BPM)</option>
+            <option value="ble">Live Bluetooth Smartwatch Stream</option>
+          </select>
+        </div>
+
+        <!-- 2. Pipeline Forwarding -->
+        <div>
+          <label class="block text-[11px] font-semibold uppercase text-slate-400 mb-1">Pipeline Forwarding</label>
+          <select id="selectForwarding" class="w-full bg-slate-950 border border-slate-700/80 rounded-lg px-2.5 py-1.5 text-xs text-slate-200 focus:outline-none focus:border-cyan-400 transition-colors">
+            <option value="true" selected>EX/MEM -> EX Forwarding (ON)</option>
+            <option value="false">No Forwarding (OFF - Stalls on RAW)</option>
+          </select>
+        </div>
+
+        <!-- 3. Branch Prediction Unit -->
+        <div>
+          <label class="block text-[11px] font-semibold uppercase text-slate-400 mb-1">Branch Prediction Unit</label>
+          <select id="selectBranchPredictor" class="w-full bg-slate-950 border border-slate-700/80 rounded-lg px-2.5 py-1.5 text-xs text-slate-200 focus:outline-none focus:border-cyan-400 transition-colors">
+            <option value="dynamic_2bit" selected>Dynamic 2-Bit BHT + BTB (~98% Acc)</option>
+            <option value="static_not_taken">Static Predict Not-Taken (2-Cyc Flush)</option>
+            <option value="none">No Predictor (2-Cyc Flush Taken)</option>
+          </select>
+        </div>
+
+        <!-- 4. L1 Data Cache Size -->
+        <div>
+          <label class="block text-[11px] font-semibold uppercase text-slate-400 mb-1">L1 Data Cache Size</label>
+          <select id="selectCacheSize" class="w-full bg-slate-950 border border-slate-700/80 rounded-lg px-2.5 py-1.5 text-xs text-slate-200 focus:outline-none focus:border-cyan-400 transition-colors">
+            <option value="128">128 Bytes (8 Blocks)</option>
+            <option value="256">256 Bytes (16 Blocks)</option>
+            <option value="512" selected>512 Bytes (32 Blocks)</option>
+          </select>
+        </div>
+
+        <!-- 5. L1 Cache Associativity -->
+        <div>
+          <label class="block text-[11px] font-semibold uppercase text-slate-400 mb-1">L1 Associativity (LRU)</label>
+          <select id="selectAssociativity" class="w-full bg-slate-950 border border-slate-700/80 rounded-lg px-2.5 py-1.5 text-xs text-slate-200 focus:outline-none focus:border-cyan-400 transition-colors">
+            <option value="1">Direct-Mapped (1-Way)</option>
+            <option value="2">2-Way Set Associative (LRU)</option>
+            <option value="4" selected>4-Way Set Associative (LRU)</option>
+          </select>
+        </div>
+
+      </div>
+
+      <!-- Quick Presets Bar -->
+      <div class="mt-3 pt-3 border-t border-slate-800/80 flex flex-wrap items-center justify-between gap-2 text-xs">
+        <span class="text-slate-400 font-semibold">Quick Architectural Presets:</span>
+        <div class="flex items-center gap-2">
+          <button id="btnPresetBaseline" class="px-3 py-1 rounded bg-slate-800 hover:bg-slate-700 text-rose-300 border border-rose-500/30 transition-all font-medium">
+            Preset: Baseline Stall / 1-Way (128B)
+          </button>
+          <button id="btnPresetOptimized" class="px-3 py-1 rounded bg-slate-800 hover:bg-slate-700 text-emerald-300 border border-emerald-500/30 transition-all font-medium">
+            Preset: Optimized ARM Cortex-M4 (Forwarding + 2-Bit BHT + 512B 4-Way)
+          </button>
+        </div>
+      </div>
+
+    </div>
+  </section>
+
+  <!-- ======================================================== -->
+  <!-- 3. LIVE 6-CARD KPI METRIC STRIP                         -->
+  <!-- ======================================================== -->
+  <section class="max-w-7xl mx-auto w-full px-4 lg:px-8 mt-4">
+    <div class="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-3">
+      
+      <!-- Card 1: ARM RISC Instructions -->
+      <div class="glass-card glass-card-hover p-3.5">
+        <div class="text-[11px] uppercase tracking-wider text-slate-400 font-semibold mb-1">ARM Instructions</div>
+        <div id="kpiInstructions" class="text-xl font-bold font-mono-code text-cyan-400">8,800</div>
+        <div id="kpiInstrMix" class="text-[10px] text-slate-400 mt-1 truncate">27.3% MAC • 36.4% LDR/STR</div>
+      </div>
+
+      <!-- Card 2: Pipeline Cycles & Stalls -->
+      <div class="glass-card glass-card-hover p-3.5">
+        <div class="text-[11px] uppercase tracking-wider text-slate-400 font-semibold mb-1">Pipeline Cycles</div>
+        <div id="kpiCycles" class="text-xl font-bold font-mono-code text-blue-400">11,592 cyc</div>
+        <div id="kpiStallCycles" class="text-[10px] text-amber-400 mt-1 truncate">LU: 800 | RAW: 0 | Flush: 6</div>
+      </div>
+
+      <!-- Card 3: Effective CPI & IPC -->
+      <div class="glass-card glass-card-hover p-3.5">
+        <div class="text-[11px] uppercase tracking-wider text-slate-400 font-semibold mb-1">Effective CPI / IPC</div>
+        <div class="flex items-baseline gap-1">
+          <span id="kpiCpi" class="text-xl font-bold font-mono-code text-emerald-400">1.317</span>
+          <span class="text-xs text-slate-400">CPI</span>
+        </div>
+        <div id="kpiIpc" class="text-[10px] text-slate-400 mt-1">IPC: 0.759 instr/cyc</div>
+      </div>
+
+      <!-- Card 4: L1 Cache Hit Ratio -->
+      <div class="glass-card glass-card-hover p-3.5">
+        <div class="text-[11px] uppercase tracking-wider text-slate-400 font-semibold mb-1">L1 Data Cache Hit</div>
+        <div id="kpiHitRatio" class="text-xl font-bold font-mono-code text-emerald-400">91.66%</div>
+        <div id="kpiHitDetails" class="text-[10px] text-slate-400 mt-1 truncate">Hits: 2,200 | Cold: 200</div>
+      </div>
+
+      <!-- Card 5: Memory AMAT -->
+      <div class="glass-card glass-card-hover p-3.5">
+        <div class="text-[11px] uppercase tracking-wider text-slate-400 font-semibold mb-1">Memory AMAT</div>
+        <div id="kpiAmat" class="text-xl font-bold font-mono-code text-amber-400">2.001 cyc</div>
+        <div id="kpiAmatFormula" class="text-[10px] text-slate-400 mt-1 truncate">Hit 1 cyc + Miss × 12 cyc</div>
+      </div>
+
+      <!-- Card 6: Live Biometrics & Source -->
+      <div class="glass-card glass-card-hover p-3.5">
+        <div class="text-[11px] uppercase tracking-wider text-slate-400 font-semibold mb-1">Biometrics & Source</div>
+        <div id="kpiBiometrics" class="text-sm font-bold font-mono-code text-rose-300 truncate">15 Steps • 76 BPM</div>
+        <div id="kpiSourceBadge" class="text-[10px] font-mono-code text-cyan-300 mt-1 truncate">Sim: Brisk Walking</div>
+      </div>
+
+    </div>
+  </section>
+
+  <!-- ======================================================== -->
+  <!-- 4. TABBED WORKSPACE VIEWS                                -->
+  <!-- ======================================================== -->
+  <main class="max-w-7xl mx-auto w-full px-4 lg:px-8 mt-5 mb-12 flex-1">
+
+    <!-- ====================================================== -->
+    <!-- TAB 1: OVERVIEW & LIVE SENSORS & PERFORMANCE CHARTS    -->
+    <!-- ====================================================== -->
+    <div id="tab-overview" class="tab-view space-y-5">
+      
+      <!-- Top 2 Charts: Sensor Waveforms -->
+      <div class="grid grid-cols-1 lg:grid-cols-2 gap-5">
+        
+        <!-- Chart 1: 3-Axis IMU Acceleration & Magnitude Squared -->
+        <div class="glass-card p-4 flex flex-col">
+          <div class="flex items-center justify-between mb-2">
+            <div>
+              <h2 class="text-sm font-bold text-white flex items-center gap-2">
+                <span>3-Axis IMU Acceleration & Magnitude Squared (|A|)</span>
+              </h2>
+              <p class="text-[11px] text-slate-400 font-mono-code">FIFO: 0x2000_0000 - 0x2000_0800 • |A|^2 = ax^2 + ay^2 + az^2 (Q10)</p>
+            </div>
+            <span class="px-2 py-0.5 rounded text-[10px] font-semibold bg-rose-500/20 text-rose-300 border border-rose-500/30">
+              Threshold: 1.52g
+            </span>
+          </div>
+          <!-- Fixed height h-64 container -->
+          <div class="relative h-64 w-full">
+            <canvas id="chartImuCanvas"></canvas>
+          </div>
+        </div>
+
+        <!-- Chart 2: Optical PPG 4-Tap FIR Filter -->
+        <div class="glass-card p-4 flex flex-col">
+          <div class="flex items-center justify-between mb-2">
+            <div>
+              <h2 class="text-sm font-bold text-white flex items-center gap-2">
+                <span>Optical PPG 4-Tap Fixed-Point FIR Filter</span>
+              </h2>
+              <p class="text-[11px] text-slate-400 font-mono-code">FIFO: 0x2000_0C00 • Taps [1, 3, 3, 1] • Normalization: ASR R5, #3</p>
+            </div>
+            <span class="px-2 py-0.5 rounded text-[10px] font-semibold bg-emerald-500/20 text-emerald-300 border border-emerald-500/30">
+              Systolic Peak Beat Detection
+            </span>
+          </div>
+          <!-- Fixed height h-64 container -->
+          <div class="relative h-64 w-full">
+            <canvas id="chartPpgCanvas"></canvas>
+          </div>
+        </div>
+
+      </div>
+
+      <!-- Bottom 2 Charts: COA Architecture Performance Metrics -->
+      <div class="grid grid-cols-1 lg:grid-cols-2 gap-5">
+        
+        <!-- Chart 3: 5-Stage Pipeline CPI Breakdown -->
+        <div class="glass-card p-4 flex flex-col">
+          <div class="flex items-center justify-between mb-2">
+            <div>
+              <h2 class="text-sm font-bold text-white">5-Stage Pipeline CPI Breakdown (Cycles Per Instruction)</h2>
+              <p class="text-[11px] text-slate-400">Impact of EX/MEM Forwarding, Load-Use Stalls & 2-Bit BHT Branch Flushes</p>
+            </div>
+            <span class="px-2 py-0.5 rounded text-[10px] font-mono-code bg-blue-500/20 text-blue-300 border border-blue-500/30">
+              Target CPI: ~1.32
+            </span>
+          </div>
+          <div class="relative h-64 w-full">
+            <canvas id="chartCpiCanvas"></canvas>
+          </div>
+        </div>
+
+        <!-- Chart 4: L1 Cache Associativity Hit Ratio -->
+        <div class="glass-card p-4 flex flex-col">
+          <div class="flex items-center justify-between mb-2">
+            <div>
+              <h2 class="text-sm font-bold text-white">L1 Data Cache Associativity Hit Ratio (%)</h2>
+              <p class="text-[11px] text-slate-400">Power-of-2 Stride (0x0400): 1-Way & 2-Way Thrashing vs. 4-Way LRU Resolution</p>
+            </div>
+            <span class="px-2 py-0.5 rounded text-[10px] font-mono-code bg-emerald-500/20 text-emerald-300 border border-emerald-500/30">
+              4-Way LRU: 91.66%
+            </span>
+          </div>
+          <div class="relative h-64 w-full">
+            <canvas id="chartCacheCanvas"></canvas>
+          </div>
+        </div>
+
+      </div>
+
+      <!-- Architectural Deep Dive Cards -->
+      <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
+        
+        <div class="glass-card p-4 border-l-4 border-cyan-400">
+          <h3 class="text-xs font-bold text-white uppercase tracking-wider mb-1">16-Bit Q10 Fixed-Point ALU</h3>
+          <p class="text-xs text-slate-400 leading-relaxed">
+            Floating-point hardware in smartwatches consumes excessive microwatts. By scaling sensor values by <code class="font-mono-code text-cyan-300">1024 (2^10)</code>, standard integer ALU instructions execute high-precision accelerometer and optical filtering in single clock cycles.
+          </p>
+        </div>
+
+        <div class="glass-card p-4 border-l-4 border-amber-400">
+          <h3 class="text-xs font-bold text-white uppercase tracking-wider mb-1">Magnitude Squared vs. SQRT Stalls</h3>
+          <p class="text-xs text-slate-400 leading-relaxed">
+            Computing Euclidean magnitude <code class="font-mono-code text-amber-300">|A| = sqrt(x^2 + y^2 + z^2)</code> requires a hardware square root taking 14-34 cycles. Cortex-M computes <code class="font-mono-code text-amber-300">|A|^2</code> via <code class="font-mono-code text-cyan-300">MUL + 2x MLA</code> and compares directly to <code class="font-mono-code text-amber-300">T^2 = 2,423,296</code> in 3 single cycles!
+          </p>
+        </div>
+
+        <div class="glass-card p-4 border-l-4 border-emerald-400">
+          <h3 class="text-xs font-bold text-white uppercase tracking-wider mb-1">Power-of-2 Stride Cache Conflict</h3>
+          <p class="text-xs text-slate-400 leading-relaxed">
+            The 4 ring buffers (<code class="font-mono-code text-emerald-300">ax, ay, az, ppg</code>) are aligned on <code class="font-mono-code text-emerald-300">0x0400 (1,024B)</code> boundaries. In 1-Way and 2-Way caches, simultaneous sample reads map to the exact same cache set (Set 0), causing 50% hit thrashing. A 4-Way cache keeps all 4 lines co-resident!
+          </p>
+        </div>
+
+      </div>
+
+    </div>
+
+    <!-- ====================================================== -->
+    <!-- TAB 2: ARM RISC TRACE & 5-STAGE PIPELINE STEPPER       -->
+    <!-- ====================================================== -->
+    <div id="tab-pipeline" class="tab-view hidden space-y-5">
+      
+      <!-- Interactive Clock-Cycle Stepper Control Bar -->
+      <div class="glass-card p-4 flex flex-col md:flex-row items-center justify-between gap-4">
+        
+        <!-- Left: Cycle Counter and Control Buttons -->
+        <div class="flex items-center gap-3">
+          <div class="px-3.5 py-1.5 rounded-lg bg-slate-950 border border-cyan-500/50 shadow-inner">
+            <span class="text-[10px] uppercase tracking-wider text-slate-400 block font-semibold">Clock Cycle</span>
+            <span id="stepperCycleDisplay" class="text-lg font-bold font-mono-code text-cyan-400">T = 1 cyc</span>
+          </div>
+
+          <div class="flex items-center gap-1.5">
+            <button id="btnStepPrev" class="px-3 py-1.5 rounded border border-slate-700 bg-slate-800 hover:bg-slate-700 text-slate-200 font-semibold text-xs flex items-center gap-1 transition-all">
+              <span>◀ Prev</span>
+            </button>
+            <button id="btnStepPlayPause" class="px-3 py-1.5 rounded border border-emerald-500/50 bg-emerald-500/20 text-emerald-300 font-semibold text-xs flex items-center gap-1.5 hover:bg-emerald-500/30 transition-all">
+              <svg class="w-4 h-4 text-emerald-400" fill="currentColor" viewBox="0 0 24 24"><path d="M8 5v14l11-7z"/></svg>
+              <span>Auto-Step</span>
+            </button>
+            <button id="btnStepNext" class="px-3 py-1.5 rounded border border-slate-700 bg-slate-800 hover:bg-slate-700 text-slate-200 font-semibold text-xs flex items-center gap-1 transition-all">
+              <span>Next ▶</span>
+            </button>
+            <button id="btnStepReset" class="px-3 py-1.5 rounded border border-slate-700 bg-slate-800 hover:bg-slate-700 text-slate-300 font-semibold text-xs flex items-center gap-1 transition-all" title="Reset to Cycle 1">
+              <span>Reset</span>
+            </button>
+          </div>
+        </div>
+
+        <!-- Right: Stepper Speed Slider -->
+        <div class="flex items-center gap-3 text-xs">
+          <span class="text-slate-400 font-medium">Clock Speed:</span>
+          <input id="stepperSpeedSlider" type="range" min="100" max="1500" step="50" value="400" class="w-32 cursor-pointer">
+          <span id="stepperSpeedDisplay" class="font-mono-code text-cyan-400 font-bold w-14 text-right">400ms</span>
+        </div>
+
+      </div>
+
+      <!-- Hazard Alert Banner -->
+      <div id="hazardAlertBanner" class="p-3.5 rounded-lg border bg-slate-900 border-slate-700 flex items-center gap-3 text-xs md:text-sm font-medium transition-all">
+        <span class="led-beacon led-cyan shrink-0"></span>
+        <span class="flex-1">NORMAL PIPELINE FLOW (No Hazards)</span>
+        <span class="text-[11px] font-mono-code px-2 py-0.5 rounded bg-slate-800 text-slate-300">Cycle 1</span>
+      </div>
+
+      <!-- 5-Stage Datapath Cards -->
+      <div>
+        <div class="flex items-center justify-between mb-2">
+          <h2 class="text-xs font-bold uppercase tracking-wider text-slate-400">5-Stage ARM Cortex-M Datapath Status</h2>
+          <span class="text-xs font-mono-code text-slate-500">IF ➔ ID ➔ EX ➔ MEM ➔ WB</span>
+        </div>
+        <div class="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-5 gap-3">
+          
+          <!-- Stage 1: IF -->
+          <div id="stageIF" class="pipeline-stage-card glass-card p-3 border border-slate-800 text-left">
+            <div class="text-[11px] uppercase tracking-wider text-slate-500 font-semibold mb-1">IF (Fetch)</div>
+            <div class="text-sm font-mono-code text-slate-400">IDLE</div>
+          </div>
+
+          <!-- Stage 2: ID -->
+          <div id="stageID" class="pipeline-stage-card glass-card p-3 border border-slate-800 text-left">
+            <div class="text-[11px] uppercase tracking-wider text-slate-500 font-semibold mb-1">ID (Decode)</div>
+            <div class="text-sm font-mono-code text-slate-400">IDLE</div>
+          </div>
+
+          <!-- Stage 3: EX -->
+          <div id="stageEX" class="pipeline-stage-card glass-card p-3 border border-slate-800 text-left">
+            <div class="text-[11px] uppercase tracking-wider text-slate-500 font-semibold mb-1">EX (Execute)</div>
+            <div class="text-sm font-mono-code text-slate-400">IDLE</div>
+          </div>
+
+          <!-- Stage 4: MEM -->
+          <div id="stageMEM" class="pipeline-stage-card glass-card p-3 border border-slate-800 text-left">
+            <div class="text-[11px] uppercase tracking-wider text-slate-500 font-semibold mb-1">MEM (Memory)</div>
+            <div class="text-sm font-mono-code text-slate-400">IDLE</div>
+          </div>
+
+          <!-- Stage 5: WB -->
+          <div id="stageWB" class="pipeline-stage-card glass-card p-3 border border-slate-800 text-left">
+            <div class="text-[11px] uppercase tracking-wider text-slate-500 font-semibold mb-1">WB (Writeback)</div>
+            <div class="text-sm font-mono-code text-slate-400">IDLE</div>
+          </div>
+
+        </div>
+      </div>
+
+      <!-- 22-Instruction ARM Kernel Trace Table -->
+      <div class="glass-card p-4">
+        <div class="flex items-center justify-between mb-3">
+          <div>
+            <h2 class="text-sm font-bold text-white flex items-center gap-2">
+              <span>22-Instruction ARM Cortex-M Processing Loop Trace</span>
+            </h2>
+            <p class="text-[11px] text-slate-400 font-mono-code">PC: 0x08000100 to 0x0800015C • Multi-Stage Hazards & Forwarding Annotations</p>
+          </div>
+          <div class="flex items-center gap-3 text-xs font-mono-code">
+            <span class="flex items-center gap-1.5"><span class="w-3 h-3 rounded bg-cyan-500/30 border border-cyan-400"></span> In EX Stage</span>
+            <span class="flex items-center gap-1.5"><span class="w-3 h-3 rounded bg-blue-500/30 border border-blue-400"></span> In ID Stage</span>
+          </div>
+        </div>
+
+        <div class="overflow-x-auto max-h-96 rounded-lg border border-slate-800">
+          <table class="w-full text-left border-collapse">
+            <thead class="bg-slate-950/90 text-[11px] uppercase tracking-wider text-slate-400 font-semibold border-b border-slate-800 sticky top-0 z-10 backdrop-blur-md">
+              <tr>
+                <th class="p-2.5">PC Addr</th>
+                <th class="p-2.5">Instruction</th>
+                <th class="p-2.5">Operands</th>
+                <th class="p-2.5">SRAM Target</th>
+                <th class="p-2.5">ALU Class</th>
+                <th class="p-2.5">Architectural Description & Hazard Analysis</th>
+              </tr>
+            </thead>
+            <tbody id="assemblyTraceTableBody" class="divide-y divide-slate-800/60 text-slate-300">
+              <!-- Dynamically populated from ARM_KERNEL -->
+            </tbody>
+          </table>
+        </div>
+      </div>
+
+    </div>
+
+    <!-- ====================================================== -->
+    <!-- TAB 3: L1 CACHE SET INSPECTOR & SRAM MEMORY MAP        -->
+    <!-- ====================================================== -->
+    <div id="tab-cache" class="tab-view hidden space-y-5">
+      
+      <!-- Top Row: Configuration Status & Bit Field Address Decoder -->
+      <div class="grid grid-cols-1 lg:grid-cols-3 gap-5">
+        
+        <!-- Left: SRAM Circular Buffer Memory Map (0x2000_0000 - 0x2000_1120) -->
+        <div class="glass-card p-4 lg:col-span-1 flex flex-col justify-between">
+          <div>
+            <h2 class="text-sm font-bold text-white mb-1">SRAM Circular Buffer Map</h2>
+            <p class="text-xs text-slate-400 mb-3">Power-of-2 Stride: Exactly 1,024-Byte (0x0400) alignment</p>
+
+            <div class="space-y-2 text-xs font-mono-code">
+              
+              <!-- IMU X FIFO -->
+              <div class="p-2.5 rounded bg-cyan-950/30 border border-cyan-500/40 flex items-center justify-between">
+                <div>
+                  <div class="text-cyan-300 font-bold">0x2000_0000</div>
+                  <div class="text-[11px] text-slate-400 font-sans">IMU Accel X FIFO (800B)</div>
+                </div>
+                <button class="btn-quick-addr px-2 py-0.5 rounded bg-slate-800 text-[10px] text-cyan-300 border border-slate-700 hover:border-cyan-400" data-addr="0x20000000">Decode</button>
+              </div>
+
+              <!-- IMU Y FIFO -->
+              <div class="p-2.5 rounded bg-blue-950/30 border border-blue-500/40 flex items-center justify-between">
+                <div>
+                  <div class="text-blue-300 font-bold">0x2000_0400</div>
+                  <div class="text-[11px] text-slate-400 font-sans">IMU Accel Y FIFO (800B)</div>
+                </div>
+                <button class="btn-quick-addr px-2 py-0.5 rounded bg-slate-800 text-[10px] text-blue-300 border border-slate-700 hover:border-blue-400" data-addr="0x20000400">Decode</button>
+              </div>
+
+              <!-- IMU Z FIFO -->
+              <div class="p-2.5 rounded bg-indigo-950/30 border border-indigo-500/40 flex items-center justify-between">
+                <div>
+                  <div class="text-indigo-300 font-bold">0x2000_0800</div>
+                  <div class="text-[11px] text-slate-400 font-sans">IMU Accel Z FIFO (800B)</div>
+                </div>
+                <button class="btn-quick-addr px-2 py-0.5 rounded bg-slate-800 text-[10px] text-indigo-300 border border-slate-700 hover:border-indigo-400" data-addr="0x20000800">Decode</button>
+              </div>
+
+              <!-- Optical PPG FIFO -->
+              <div class="p-2.5 rounded bg-emerald-950/30 border border-emerald-500/40 flex items-center justify-between">
+                <div>
+                  <div class="text-emerald-300 font-bold">0x2000_0C00</div>
+                  <div class="text-[11px] text-slate-400 font-sans">Optical PPG FIFO (800B)</div>
+                </div>
+                <button class="btn-quick-addr px-2 py-0.5 rounded bg-slate-800 text-[10px] text-emerald-300 border border-slate-700 hover:border-emerald-400" data-addr="0x20000C00">Decode</button>
+              </div>
+
+              <!-- Activity State Buffer -->
+              <div class="p-2.5 rounded bg-amber-950/30 border border-amber-500/40 flex items-center justify-between">
+                <div>
+                  <div class="text-amber-300 font-bold">0x2000_1120</div>
+                  <div class="text-[11px] text-slate-400 font-sans">Activity State Buffer (32B)</div>
+                </div>
+                <button class="btn-quick-addr px-2 py-0.5 rounded bg-slate-800 text-[10px] text-amber-300 border border-slate-700 hover:border-amber-400" data-addr="0x20001120">Decode</button>
+              </div>
+
+            </div>
+          </div>
+
+          <!-- Stride Pathology Note -->
+          <div class="mt-4 p-3 rounded bg-slate-900/90 border border-slate-800 text-[11px] text-slate-400 leading-relaxed font-sans">
+            <span class="text-amber-400 font-bold">Why 4-Way LRU is Mandatory:</span>
+            Notice that <code class="font-mono-code text-cyan-300">0x0400 = 1,024</code> is an exact multiple of 128B, 256B, and 512B line strides. In 1-Way and 2-Way caches, all 4 FIFOs map to <span class="text-rose-400 font-bold font-mono">Set #0</span> simultaneously, evicting each other on every sample frame!
+          </div>
+        </div>
+
+        <!-- Right: Interactive Address Bit Field Decoder & Cache Config -->
+        <div class="glass-card p-4 lg:col-span-2 flex flex-col justify-between">
+          <div>
+            <div class="flex items-center justify-between mb-3">
+              <div>
+                <h2 class="text-sm font-bold text-white">Hardware Cache Address Bit Field Decoder</h2>
+                <p id="cacheConfigDisplay" class="text-xs text-slate-400 font-mono-code">512 Bytes Total • 4-Way Set Associative • 16-Byte Line Size</p>
+              </div>
+              <span id="cacheSummaryBadge" class="px-3 py-1 rounded-full text-xs font-semibold bg-emerald-500/20 text-emerald-300 border border-emerald-500/40">
+                STATUS: ALL 4 STREAMS CO-RESIDENT (91.7% HIT RATIO)
+              </span>
+            </div>
+
+            <!-- Address Input Bar -->
+            <div class="mb-4">
+              <label class="block text-[11px] font-semibold uppercase text-slate-400 mb-1">Test 32-Bit SRAM Memory Address</label>
+              <div class="flex items-center gap-2">
+                <input id="bitFieldAddressInput" type="text" value="0x20000400" class="bg-slate-950 border border-slate-700 rounded-lg px-3 py-2 text-sm font-mono-code text-cyan-300 w-full focus:outline-none focus:border-cyan-400">
+              </div>
+            </div>
+
+            <!-- Bit Field Breakdown Graphic -->
+            <div class="grid grid-cols-3 gap-3 text-center font-mono-code mb-3">
+              <!-- Tag Bits -->
+              <div class="p-3 rounded-lg bg-cyan-950/40 border border-cyan-500/40">
+                <div class="text-[10px] uppercase font-sans text-slate-400 font-semibold mb-1">Tag Field</div>
+                <div id="bitFieldTag" class="text-base font-bold text-cyan-300">0x200004</div>
+                <div class="text-[10px] text-slate-500 font-sans mt-1">Upper Bits</div>
+              </div>
+
+              <!-- Set Index Bits -->
+              <div class="p-3 rounded-lg bg-amber-950/40 border border-amber-500/40">
+                <div class="text-[10px] uppercase font-sans text-slate-400 font-semibold mb-1">Set Index</div>
+                <div id="bitFieldSet" class="text-base font-bold text-amber-300">Set #0</div>
+                <div class="text-[10px] text-slate-500 font-sans mt-1">Log2(Sets) Bits</div>
+              </div>
+
+              <!-- Line Offset Bits -->
+              <div class="p-3 rounded-lg bg-emerald-950/40 border border-emerald-500/40">
+                <div class="text-[10px] uppercase font-sans text-slate-400 font-semibold mb-1">Line Offset</div>
+                <div id="bitFieldOffset" class="text-base font-bold text-emerald-300">0 (Byte 0/15)</div>
+                <div class="text-[10px] text-slate-500 font-sans mt-1">4 Bits (16-Byte Line)</div>
+              </div>
+            </div>
+
+            <p id="bitFieldExplanation" class="text-xs text-slate-300 bg-slate-900/60 p-3 rounded border border-slate-800">
+              Maps to Accel Y FIFO base (0x0400 = 1024B offset). Notice that 1024 is divisible by line & set size, so Set Index is still 0!
+            </p>
+          </div>
+
+          <!-- AMAT Formula Callout -->
+          <div class="mt-4 pt-3 border-t border-slate-800/80 flex flex-wrap items-center justify-between text-xs text-slate-400">
+            <span>AMAT Formula: <code class="font-mono-code text-cyan-300">Hit Time (1 cyc) + (Miss Rate × 12 cyc)</code></span>
+            <span class="text-emerald-400 font-semibold">4-Way LRU AMAT: 2.001 cycles vs 1-Way: 6.957 cycles</span>
+          </div>
+
+        </div>
+
+      </div>
+
+      <!-- Live Cache Set & Way Table (Shows All Sets and Occupied Ways) -->
+      <div class="glass-card p-4">
+        <div class="flex items-center justify-between mb-3">
+          <div>
+            <h2 class="text-sm font-bold text-white flex items-center gap-2">
+              <span>Live Cache Set & Way Inspector (LRU ➔ MRU Order)</span>
+            </h2>
+            <p class="text-xs text-slate-400">Real-time occupancy of cache blocks, tags, memory ranges, and stream co-residency</p>
+          </div>
+          <span class="text-xs font-mono-code text-slate-500">Way K-1 = MRU • Way 0 = LRU</span>
+        </div>
+
+        <div id="cacheSetsContainer" class="space-y-3">
+          <!-- Dynamically populated from cache simulation -->
+        </div>
+      </div>
+
+    </div>
+
+  </main>
+
+  <!-- ======================================================== -->
+  <!-- 5. EDUCATIONAL ARCHITECTURE GUIDE MODAL                  -->
+  <!-- ======================================================== -->
+  <div id="guideModal" class="hidden fixed inset-0 z-50 bg-black/80 backdrop-blur-sm flex items-center justify-center p-4">
+    <div class="glass-card max-w-2xl w-full max-h-[85vh] overflow-y-auto p-6 border border-cyan-500/50 shadow-2xl">
+      <div class="flex items-center justify-between pb-3 border-b border-slate-800 mb-4">
+        <h3 class="text-lg font-bold text-white flex items-center gap-2">
+          <span class="text-cyan-400">COA Architecture Guide</span>
+          <span class="text-xs px-2 py-0.5 rounded bg-cyan-500/20 text-cyan-300 font-mono">Cortex-M</span>
+        </h3>
+        <button onclick="document.getElementById('guideModal').classList.add('hidden')" class="text-slate-400 hover:text-white text-xl leading-none">&times;</button>
+      </div>
+
+      <div class="space-y-4 text-xs text-slate-300 leading-relaxed font-sans">
+        <div>
+          <h4 class="font-bold text-cyan-300 uppercase tracking-wider mb-1">1. Live Web Bluetooth GATT Bridge</h4>
+          <p>
+            Connects to your physical smartwatch using the Web Bluetooth API (<code class="font-mono-code text-slate-200">navigator.bluetooth.requestDevice</code>). It queries standard services: Heart Rate (<code class="font-mono-code text-rose-300">0x180D</code> / <code class="font-mono-code text-rose-300">0x2A37</code>), Running Speed & Cadence (<code class="font-mono-code text-cyan-300">0x1814</code> / <code class="font-mono-code text-cyan-300">0x2A53</code>), and Battery (<code class="font-mono-code text-emerald-300">0x180F</code> / <code class="font-mono-code text-emerald-300">0x2A19</code>). If your smartwatch conceals standard UUIDs behind proprietary vendors, it automatically activates the Hardware Telemetry Stream fallback with DeviceMotion shake support!
+          </p>
+        </div>
+
+        <div>
+          <h4 class="font-bold text-amber-300 uppercase tracking-wider mb-1">2. 16-Bit Q10 Fixed-Point ALU Architecture</h4>
+          <p>
+            Smartwatches operate in the microwatt power envelope. Instead of bulky floating-point hardware or slow software emulations, accelerometer and optical PPG readings are scaled by <code class="font-mono-code text-amber-300">1024</code> (<code class="font-mono-code text-slate-200">Q10 format</code>). Step detection computes <code class="font-mono-code text-amber-300">|A|^2 = ax^2 + ay^2 + az^2</code> and compares against <code class="font-mono-code text-amber-300">T^2 = 2,423,296</code> using single-cycle <code class="font-mono-code text-slate-200">MUL</code> and <code class="font-mono-code text-slate-200">MLA</code>, eliminating hardware square-root stalls!
+          </p>
+        </div>
+
+        <div>
+          <h4 class="font-bold text-emerald-300 uppercase tracking-wider mb-1">3. Power-of-2 Stride Cache Conflict & 4-Way LRU</h4>
+          <p>
+            The 4 ring buffers (<code class="font-mono-code text-emerald-300">ax, ay, az, ppg</code>) reside at <code class="font-mono-code text-slate-200">0x2000_0000</code>, <code class="font-mono-code text-slate-200">0x2000_0400</code>, <code class="font-mono-code text-slate-200">0x2000_0800</code>, and <code class="font-mono-code text-slate-200">0x2000_0C00</code>. Because 1,024 bytes is a power-of-2 multiple of cache block and set sizes, simultaneous reads to sample <code class="font-mono-code text-slate-200">n</code> all map to <span class="font-bold text-rose-400">Set #0</span>! Direct-mapped (1-way) and 2-way caches suffer pathological conflict thrashing (~50% hit rate). A <span class="font-bold text-emerald-400">4-Way Set Associative Cache</span> holds all 4 lines concurrently, achieving an optimal <span class="font-bold text-emerald-400">91.66% hit rate</span>!
+          </p>
+        </div>
+
+        <div>
+          <h4 class="font-bold text-blue-300 uppercase tracking-wider mb-1">4. 5-Stage Pipeline Hazards & Forwarding</h4>
+          <p>
+            With <code class="font-mono-code text-blue-300">EX/MEM -> EX Data Forwarding</code>, ALU-to-ALU RAW hazards incur 0 stall cycles. Load-Use hazards (<code class="font-mono-code text-slate-200">LDRSH -> MUL</code>) require only a 1-cycle bubble. Combined with a <code class="font-mono-code text-blue-300">Dynamic 2-Bit Saturating Counter BHT</code> for loop branches, the effective CPI improves from 2.26 down to 1.32!
+          </p>
+        </div>
+      </div>
+
+      <div class="mt-5 pt-3 border-t border-slate-800 flex justify-end">
+        <button onclick="document.getElementById('guideModal').classList.add('hidden')" class="px-4 py-2 rounded-lg bg-cyan-600 hover:bg-cyan-500 text-white font-semibold text-xs transition-all">
+          Close Guide
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <!-- ======================================================== -->
+  <!-- MODAL: LINK WINDOWS PAIRED WATCH OR CUSTOM SMARTWATCH   -->
+  <!-- ======================================================== -->
+  <div id="quickLinkModal" class="hidden fixed inset-0 z-50 bg-black/80 backdrop-blur-sm flex items-center justify-center p-4">
+    <div class="glass-card max-w-lg w-full p-6 border border-cyan-500/50 shadow-2xl space-y-4">
+      <div class="flex items-center justify-between pb-3 border-b border-slate-800">
+        <h3 class="text-base font-bold text-white flex items-center gap-2">
+          <span class="text-cyan-400">⚡ Link Paired Smartwatch</span>
+        </h3>
+        <button id="btnCloseQuickLink" class="text-slate-400 hover:text-white text-xl leading-none">&times;</button>
+      </div>
+
+      <p class="text-xs text-slate-300 leading-relaxed font-sans">
+        If your watch is already connected to Windows via Bluetooth, select your model or type its name to immediately bind its telemetry stream into the ARM processor circular buffers:
+      </p>
+
+      <!-- Quick Brand Buttons -->
+      <div class="grid grid-cols-2 sm:grid-cols-3 gap-2 text-xs">
+        <button class="btn-select-watch-model p-2 rounded-lg bg-slate-800/80 hover:bg-cyan-950/60 hover:border-cyan-500/60 border border-slate-700 text-slate-200 font-semibold transition-all text-left" data-name="Noise ColorFit Icon 2">
+          <span>⌚ Noise ColorFit</span>
+        </button>
+        <button class="btn-select-watch-model p-2 rounded-lg bg-slate-800/80 hover:bg-cyan-950/60 hover:border-cyan-500/60 border border-slate-700 text-slate-200 font-semibold transition-all text-left" data-name="boAt Wave Beat">
+          <span>⌚ boAt Wave</span>
+        </button>
+        <button class="btn-select-watch-model p-2 rounded-lg bg-slate-800/80 hover:bg-cyan-950/60 hover:border-cyan-500/60 border border-slate-700 text-slate-200 font-semibold transition-all text-left" data-name="Apple Watch Series 9">
+          <span>⌚ Apple Watch</span>
+        </button>
+        <button class="btn-select-watch-model p-2 rounded-lg bg-slate-800/80 hover:bg-cyan-950/60 hover:border-cyan-500/60 border border-slate-700 text-slate-200 font-semibold transition-all text-left" data-name="Samsung Galaxy Watch6">
+          <span>⌚ Galaxy Watch</span>
+        </button>
+        <button class="btn-select-watch-model p-2 rounded-lg bg-slate-800/80 hover:bg-cyan-950/60 hover:border-cyan-500/60 border border-slate-700 text-slate-200 font-semibold transition-all text-left" data-name="Fire-Boltt Gladiator">
+          <span>⌚ Fire-Boltt</span>
+        </button>
+        <button class="btn-select-watch-model p-2 rounded-lg bg-slate-800/80 hover:bg-cyan-950/60 hover:border-cyan-500/60 border border-slate-700 text-slate-200 font-semibold transition-all text-left" data-name="Amazfit GTS / GTR">
+          <span>⌚ Amazfit Watch</span>
+        </button>
+      </div>
+
+      <!-- Custom Watch Input -->
+      <div class="pt-2">
+        <label class="block text-[11px] font-semibold uppercase text-slate-400 mb-1">Or Enter Exact Watch Device Name:</label>
+        <div class="flex items-center gap-2">
+          <input id="inputCustomWatchName" type="text" placeholder="e.g. Noise Pulse 2, Fastrack Reflex..." class="bg-slate-950 border border-slate-700 rounded-lg px-3 py-2 text-xs text-slate-200 w-full focus:outline-none focus:border-cyan-400">
+          <button id="btnConnectCustomWatch" class="px-4 py-2 rounded-lg bg-cyan-600 hover:bg-cyan-500 text-white font-bold text-xs whitespace-nowrap transition-all">
+            Link Now
+          </button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ======================================================== -->
+  <!-- MODAL: SMARTWATCH PAIRING TROUBLESHOOTING GUIDE          -->
+  <!-- ======================================================== -->
+  <div id="watchHelpModal" class="hidden fixed inset-0 z-50 bg-black/80 backdrop-blur-sm flex items-center justify-center p-4">
+    <div class="glass-card max-w-lg w-full p-6 border border-amber-500/50 shadow-2xl space-y-4">
+      <div class="flex items-center justify-between pb-3 border-b border-slate-800">
+        <h3 class="text-base font-bold text-white flex items-center gap-2">
+          <span class="text-amber-400">⌚ Smartwatch Bluetooth Troubleshooting</span>
+        </h3>
+        <button id="btnCloseWatchHelp" class="text-slate-400 hover:text-white text-xl leading-none">&times;</button>
+      </div>
+
+      <div class="space-y-3 text-xs text-slate-300 leading-relaxed font-sans">
+        <div class="p-3 rounded-lg bg-slate-900 border border-slate-800">
+          <h4 class="font-bold text-cyan-300 mb-1">1. Watch not showing in browser list?</h4>
+          <p class="text-slate-400">
+            Smartwatches (Noise, boAt, Fire-Boltt, Amazfit) only broadcast Bluetooth advertising when they are <b>disconnected from your phone</b>! Temporarily turn off Bluetooth on your smartphone so your watch enters pairing mode.
+          </p>
+        </div>
+
+        <div class="p-3 rounded-lg bg-slate-900 border border-slate-800">
+          <h4 class="font-bold text-emerald-300 mb-1">2. Already paired in Windows Bluetooth Settings?</h4>
+          <p class="text-slate-400">
+            If you already connected your watch to Windows via <i>Settings -> Bluetooth & devices</i>, click <b>"Link Paired Watch"</b> to immediately bind your live hardware telemetry stream into the simulation!
+          </p>
+        </div>
+
+        <div class="p-3 rounded-lg bg-slate-900 border border-slate-800">
+          <h4 class="font-bold text-amber-300 mb-1">3. Garmin / Apple Watch broadcast:</h4>
+          <p class="text-slate-400">
+            - <b>Garmin</b>: Go to <i>Settings -> Wrist Heart Rate -> Broadcast Heart Rate -> Start</i>.<br>
+            - <b>Apple Watch</b>: Open a BLE heart rate broadcaster app (e.g. <i>HeartCast</i>) from the App Store.
+          </p>
+        </div>
+      </div>
+
+      <div class="pt-2 flex justify-end">
+        <button id="btnDismissHelp" class="px-4 py-2 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-200 text-xs font-semibold">
+          Got it
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <!-- ======================================================== -->
+  <!-- 6. NON-BLOCKING TOAST CONTAINER                         -->
+  <!-- ======================================================== -->
+  <div id="toastContainer" class="fixed bottom-4 right-4 z-50 flex flex-col items-end pointer-events-none max-w-sm w-full"></div>
+
+  <!-- Application Logic -->
+  <script src="app.js"></script>
+</body>
+</html>
