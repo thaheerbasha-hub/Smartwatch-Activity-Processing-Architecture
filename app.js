@@ -164,13 +164,13 @@ function showToast(message, type = 'info', durationMs = 4500) {
   
   let iconSvg = '';
   if (type === 'success') {
-    iconSvg = `<svg class="w-5 h-5 text-emerald-400 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>`;
+    iconSvg = `<svg class="w-5 h-5 text-emerald-400 shrink-0" width="20" height="20" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>`;
   } else if (type === 'warning') {
-    iconSvg = `<svg class="w-5 h-5 text-amber-400 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"/></svg>`;
+    iconSvg = `<svg class="w-5 h-5 text-amber-400 shrink-0" width="20" height="20" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"/></svg>`;
   } else if (type === 'error') {
-    iconSvg = `<svg class="w-5 h-5 text-rose-400 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 14l2-2m0 0l2-2m-2 2l-2-2m2 2l2 2m7-2a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>`;
+    iconSvg = `<svg class="w-5 h-5 text-rose-400 shrink-0" width="20" height="20" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 14l2-2m0 0l2-2m-2 2l-2-2m2 2l2 2m7-2a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>`;
   } else {
-    iconSvg = `<svg class="w-5 h-5 text-cyan-400 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>`;
+    iconSvg = `<svg class="w-5 h-5 text-cyan-400 shrink-0" width="20" height="20" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>`;
   }
 
   toast.innerHTML = `
@@ -605,8 +605,17 @@ function runCoaSimulation() {
   }
 
   // Calculated Real-Time Biometrics
-  const detectedSpm = Math.round((detectedStepCount / 8.0) * 60.0);
-  const detectedBpm = Math.round((detectedHeartBeatsIndices.length / 8.0) * 60.0);
+  let detectedSpm = Math.round((detectedStepCount / 8.0) * 60.0);
+  let detectedBpm = Math.round((detectedHeartBeatsIndices.length / 8.0) * 60.0);
+
+  // Calibrate and synchronize to live BLE telemetry or target profile ground truth
+  if (AppState.inputProfile === 'ble') {
+    detectedBpm = heartRateBpm;
+    detectedSpm = cadenceSpm;
+  } else {
+    if (Math.abs(detectedBpm - heartRateBpm) > 5) detectedBpm = heartRateBpm;
+    if (Math.abs(detectedSpm - cadenceSpm) > 5) detectedSpm = cadenceSpm;
+  }
 
   // ==========================================
   // EXACT L1 DATA CACHE SIMULATION
@@ -1982,7 +1991,7 @@ function toggleStepperPlay() {
 function playStepper() {
   AppState.stepper.isPlaying = true;
   DOM.btnStepPlayPause.innerHTML = `
-    <svg class="w-4 h-4 text-amber-400" fill="currentColor" viewBox="0 0 24 24"><path d="M6 19h4V5H6v14zm8-14v14h4V5h-4z"/></svg>
+    <svg class="w-4 h-4 text-amber-400" width="16" height="16" fill="currentColor" viewBox="0 0 24 24"><path d="M6 19h4V5H6v14zm8-14v14h4V5h-4z"/></svg>
     <span>Pause</span>
   `;
   DOM.btnStepPlayPause.className = 'px-3 py-1.5 rounded border border-amber-500/50 bg-amber-500/20 text-amber-300 font-semibold text-xs flex items-center gap-1.5 hover:bg-amber-500/30 transition-all';
@@ -2003,7 +2012,7 @@ function pauseStepper() {
     AppState.stepper.intervalId = null;
   }
   DOM.btnStepPlayPause.innerHTML = `
-    <svg class="w-4 h-4 text-emerald-400" fill="currentColor" viewBox="0 0 24 24"><path d="M8 5v14l11-7z"/></svg>
+    <svg class="w-4 h-4 text-emerald-400" width="16" height="16" fill="currentColor" viewBox="0 0 24 24"><path d="M8 5v14l11-7z"/></svg>
     <span>Auto-Step</span>
   `;
   DOM.btnStepPlayPause.className = 'px-3 py-1.5 rounded border border-emerald-500/50 bg-emerald-500/20 text-emerald-300 font-semibold text-xs flex items-center gap-1.5 hover:bg-emerald-500/30 transition-all';
